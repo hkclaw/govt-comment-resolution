@@ -72,8 +72,13 @@ Set `S=.skills/govt-comment-resolution/scripts` and `R=.govt-review`.
 
 ```bash
 python3 $S/extract_comments.py --docx <incoming.docx> --out $R/comments \
-    --manifest $R/manifest.json
+    --manifest $R/manifest.json --identity $R/identity.json
 ```
+
+Pass `--identity` so a reply the department wrote to one of our answers is
+recognised as a re-raise rather than mistaken for our own reply. A re-raised
+comment comes back as `reopened`, and the department's words appear under
+**Department replies** in the comment file.
 
 Produces one Markdown file per comment plus `comments/index.md`. Each file
 carries front-matter (id, durable_id, status, owner) and a body with the
@@ -91,7 +96,7 @@ can still be written for them, but no in-document reply is possible.
 For each comment file, read it and set the front-matter:
 
 - `status`. One of `open`, `needs_input`, `drafted`, `approved`, `resolved`,
-  `rejected`, `wont_fix`.
+  `reopened`, `rejected`, `wont_fix`.
 - `owner`. Who is responsible.
 - `reply_author`. Who signs the reply. Required before a reply is applied.
 

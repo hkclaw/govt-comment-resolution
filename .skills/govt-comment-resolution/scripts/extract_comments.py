@@ -87,7 +87,8 @@ def yaml_quote(value):
     return text
 
 
-def build_comment_md(number, comment, durable_id, stable_id, anchor_text, status, owner):
+def build_comment_md(number, comment, durable_id, stable_id, anchor_text, status,
+                     owner, replies=None):
     lines = [
         "---",
         f"id: {number}",
@@ -119,6 +120,17 @@ def build_comment_md(number, comment, durable_id, stable_id, anchor_text, status
         "## Our response",
         "",
         "<!-- Draft the reply here. One paragraph per comment. -->",
+    ]
+    if replies:
+        lines += ["", "## Department replies", ""]
+        for reply in replies:
+            who = reply["author"] or "the reviewer"
+            lines.append(f"**{who}**:")
+            lines.append("")
+            for line in (reply["text"] or "").splitlines() or ["_(no text)_"]:
+                lines.append(f"> {line}")
+            lines.append("")
+    lines += [
         "",
         "## Notes",
         "",
@@ -174,7 +186,7 @@ def build_index(entries, problems, source_path):
 
 
 def merge_existing(existing, comment, durable_id, stable_id, anchor_text,
-                   default_status, default_owner):
+                   default_status, default_owner, replies=None):
     """Refresh machine-derived fields while keeping the human's triage.
 
     The status, owner, reply_author, response body, and notes are the
@@ -191,8 +203,16 @@ def merge_existing(existing, comment, durable_id, stable_id, anchor_text,
     owner = field("owner", default_owner)
     reply_author = fields.get("reply_author", "")
 
+    # A re-raise outranks whatever the ledger said. The department came back
+    # to this thread, so the comment is not resolved any more, whatever the
+    # document's resolve flag or the previous round's triage claimed.
+    if default_status == "reopened":
+        status = "reopened"
+
     response = section_body(existing, "Our response")
     notes = section_body(existing, "Notes")
+    if replies is None:
+        replies = []
     if not response:
         response = "<!-- Draft the reply here. One paragraph per comment. -->"
     if not notes:
@@ -228,7 +248,17 @@ def merge_existing(existing, comment, durable_id, stable_id, anchor_text,
             lines.append(f"> {line}")
     else:
         lines.append("_(no anchored text — this comment is not anchored in the body)_")
-    lines += ["", "## Our response", "", response, "", "## Notes", "", notes, ""]
+    lines += ["", "## Our response", "", response]
+    if replies:
+        lines += ["", "## Department replies", ""]
+        for reply in replies:
+            who = reply["author"] or "the reviewer"
+            lines.append(f"**{who}**:")
+            lines.append("")
+            for line in (reply["text"] or "").splitlines() or ["_(no text)_"]:
+                lines.append(f"> {line}")
+            lines.append("")
+    lines += ["", "## Notes", "", notes, ""]
     return "\n".join(lines)
 
 
@@ -237,6 +267,10 @@ def main():
     parser.add_argument("--docx", required=True, help="source .docx")
     parser.add_argument("--out", required=True, help="comments output directory")
     parser.add_argument("--manifest", help="optional manifest.json to update")
+    parser.add_argument(
+        "--identity", help="identity.json, so replies we wrote are not mistaken "
+                          "for the department re-raising a comment",
+    )
     parser.add_argument(
         "--force", action="store_true",
         help="overwrite existing comment files (otherwise human edits are kept)",
@@ -270,6 +304,63 @@ def main():
         if not (p["kind"] == "not_anchored" and p["w_id"] in reply_w_ids)
     ]
 
+    # A second review round arrives as the department replying to our own
+    # reply. Those replies carry no anchor of their own, so without this the
+    # re-raise is invisible and the original comment stays wrongly resolved.
+    #
+    # Work out, for every reply, which top-level comment it belongs to, and
+    # whether the department wrote it. A reply we wrote is our own answer; a
+    # reply the department wrote to our answer is a re-raise.
+    author_by_para = {c["para_id"]: c["author"] for c in comments if c["para_id"]}
+    text_by_para = {c["para_id"]: c["text"] for c in comments if c["para_id"]}
+
+    # parent_by_para maps a reply's para id to the para id it replies to.
+    parent_by_para = {
+        e["para_id"]: e["parent_para_id"]
+        for e in extended if e["parent_para_id"]
+    }
+
+    def root_of(para):
+        """Walk up to the top-level comment of a thread."""
+        current = para
+        seen = set()
+        while current in parent_by_para and current not in seen:
+            seen.add(current)
+            current = parent_by_para[current]
+        return current
+
+    # Which top-level comments have a reply in their thread that we did not
+    # write? A reply written by us carries an author from our roster; a reply
+    # written by the department does not.
+    our_authors = set()
+    if args.identity and Path(args.identity).exists():
+        roster = json.loads(Path(args.identity).read_text(encoding="utf-8"))
+        our_authors = {a.get("name") for a in roster.get("authors", []) if a.get("name")}
+
+    reraised_roots = set()
+    department_replies = {}
+    for entry in extended:
+        para = entry["para_id"]
+        if para not in parent_by_para:
+            continue
+        author = author_by_para.get(para, "")
+        if our_authors and author in our_authors:
+            # our own reply; not a re-raise
+            continue
+        root = root_of(para)
+        if not root or root == para:
+            continue
+        department_replies.setdefault(root, []).append({
+            "author": author,
+            "text": text_by_para.get(para, ""),
+        })
+        # A re-raise is the department replying to a reply of ours. The
+        # parent of the department's message must be something we wrote,
+        # otherwise it is an exchange the department started itself.
+        parent = parent_by_para[para]
+        if our_authors and author_by_para.get(parent, "") in our_authors:
+            reraised_roots.add(root)
+
     entries = []
     sequence = 0
     for comment in comments:
@@ -293,18 +384,25 @@ def main():
         owner = ""
         if para_id and done_by_para.get(para_id):
             status = "resolved"
+        if para_id and para_id in reraised_roots:
+            # The department came back to this thread. It is no longer
+            # resolved, whatever the resolve flag says.
+            status = "reopened"
 
         target = out_dir / f"{number}.md"
         if target.exists() and not args.force:
             # Keep the human's triage. Re-extracting the same document must not
             # wipe the status, owner, reply, and notes that were set by hand.
             existing = target.read_text(encoding="utf-8")
-            preserved = merge_existing(existing, comment, durable_id, stable,
-                                       anchor_text, status, owner)
+            preserved = merge_existing(
+                existing, comment, durable_id, stable,
+                anchor_text, status, owner, department_replies.get(para_id),
+            )
             target.write_text(preserved, encoding="utf-8")
         else:
             body = build_comment_md(
-                number, comment, durable_id, stable, anchor_text, status, owner
+                number, comment, durable_id, stable, anchor_text, status, owner,
+                department_replies.get(para_id),
             )
             target.write_text(body, encoding="utf-8")
 

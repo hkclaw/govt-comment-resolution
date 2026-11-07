@@ -319,6 +319,15 @@ def _make_para_id(n):
     return f"{n:08X}"
 
 
+def _has_range(body, comment_w_id):
+    """True when the body has a commentRangeStart for this comment id."""
+    for paragraph in body.iter(q(W, "p")):
+        for node in paragraph.findall(q(W, "commentRangeStart")):
+            if node.get(q(W, "id")) == str(comment_w_id):
+                return True
+    return False
+
+
 def add_reply(parts, parent_w_id, text, author, initials=None, date=None):
     """Add a threaded reply to a comment.
 
@@ -384,14 +393,38 @@ def add_reply(parts, parent_w_id, text, author, initials=None, date=None):
 
     # 5) document.xml — the reply's own commentReference inside the parent's
     #    range, otherwise the reply is silently dropped by Office consumers.
+    #
+    #    A reply to a reply has no range of its own; the top-level comment of
+    #    the thread owns the range, so the reference goes there.
     root = ET.fromstring(parts["word/document.xml"])
     body = root.find(q(W, "body"))
+
+    anchor_id = str(parent_w_id)
+    if not _has_range(body, anchor_id):
+        # The parent is itself a reply, so it has no range of its own. Climb
+        # to the top-level comment of the thread, which owns the range.
+        extended_entries = parse_comments_extended(parts)
+        parent_of = {
+            e["para_id"]: e["parent_para_id"]
+            for e in extended_entries if e["parent_para_id"]
+        }
+        w_id_by_para = {c["para_id"]: c["w_id"] for c in comments if c["para_id"]}
+        current = parent["para_id"]
+        seen = set()
+        while current in parent_of and current not in seen:
+            seen.add(current)
+            current = parent_of[current]
+            candidate = w_id_by_para.get(current)
+            if candidate and _has_range(body, candidate):
+                anchor_id = candidate
+                break
+
     placed = False
     for paragraph in body.iter(q(W, "p")):
         starts = {
             node.get(q(W, "id")) for node in paragraph.findall(q(W, "commentRangeStart"))
         }
-        if str(parent_w_id) not in starts:
+        if anchor_id not in starts:
             continue
         reference_run = ET.Element(q(W, "r"))
         ET.SubElement(reference_run, q(W, "commentReference"), {q(W, "id"): str(next_id)})
@@ -400,7 +433,7 @@ def add_reply(parts, parent_w_id, text, author, initials=None, date=None):
         break
     if not placed:
         raise KeyError(
-            f"no commentRangeStart for comment {parent_w_id} in document.xml; "
+            f"no commentRangeStart for comment {anchor_id} in document.xml; "
             "a reply cannot be anchored"
         )
     parts["word/document.xml"] = _serialize(root)

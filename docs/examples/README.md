@@ -4,7 +4,7 @@ These files are the output of one review round against the sample document.
 Regenerate them with:
 
 ```bash
-./examples/run_example.sh
+bash examples/run_example.sh
 ```
 
 The round starts from `examples/sample-incoming.docx`, which

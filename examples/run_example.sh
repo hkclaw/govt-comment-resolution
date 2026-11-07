@@ -37,7 +37,7 @@ EOF
 echo
 echo "== extract =="
 python3 "$S/extract_comments.py" --docx "$R/incoming.docx" --out "$R/comments" \
-    --manifest "$R/manifest.json"
+    --manifest "$R/manifest.json" --identity "$R/identity.json"
 
 echo
 echo "== triage =="

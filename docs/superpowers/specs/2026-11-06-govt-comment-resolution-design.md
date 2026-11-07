@@ -204,12 +204,19 @@ A parser reads the front-matter; a human edits the body.
 | `drafted` | Reply written, not yet reviewed | Review and approve reply |
 | `approved` | Reply approved, ready to apply | Apply to document |
 | `resolved` | Applied to the document and closed | Verify, then finalise |
+| `reopened` | The department replied to our answer | Answer again |
 | `rejected` | Comment declined; no change made | Justify in notes |
 | `wont_fix` | Deferred to a later round | Record deferral reason |
 
 `needs_input` is the state that supports the requirement that some comments must
 be answered by someone else. It carries an `owner`, and the reply cannot be
 drafted until that owner supplies the substance.
+
+`reopened` is how a second review round reaches the ledger. The department's
+reply to one of our answers carries no anchor of its own, so without this the
+re-raise is invisible and the comment stays wrongly resolved. Extraction takes
+`--identity` so replies we wrote are not mistaken for the department coming
+back, and the department's words are recorded in the comment file.
 
 ### 4.4 Reply file
 
