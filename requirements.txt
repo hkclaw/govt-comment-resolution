@@ -1,0 +1,6 @@
+# Needed only for the before/after review PDF and verify_round.py.
+# The core workflow (extract, apply, replies, plan, render) uses the standard
+# library alone.
+pypdf>=4.0
+Pillow>=10.0
+reportlab>=4.0
