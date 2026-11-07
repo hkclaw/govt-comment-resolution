@@ -217,6 +217,23 @@ Deliver, and state where each file is:
   in the change report as "planned but not applied". Do not silently drop it.
 - **LibreOffice missing.** The PDF steps cannot run. Report the missing
   dependency; do not hand over a partial PDF set.
+- **CJK text renders blank in the PDFs.** On macOS, LibreOffice bundles a
+  fontconfig build that does not scan the system font directories, so
+  Chinese, Japanese and Korean characters come out as empty `.notdef`
+  glyphs — the PDF has the right character count but no visible text. Fix by
+  pointing LibreOffice at a fontconfig config that lists the system font
+  directories, e.g. the Homebrew one:
+
+  ```sh
+  FONTCONFIG_FILE=/opt/homebrew/etc/fonts/fonts.conf \
+  FONTCONFIG_PATH=/opt/homebrew/etc/fonts \
+    soffice --headless --convert-to pdf --outdir out input.docx
+  ```
+
+  A `soffice` wrapper on `PATH` that exports those two variables makes it
+  apply to every conversion, including the ones this skill runs. Check the
+  result with `pdffonts out/input.pdf` — a CJK font such as
+  `NotoSerifCJK` or `NotoSansCJK` must be embedded.
 - **Document will not open after edits.** The apply step writes nothing on
   failure, so the previous document is intact. Investigate before retrying.
 - **Many comments shift pages.** The review PDF handles this by aligning page

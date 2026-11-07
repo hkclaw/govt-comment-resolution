@@ -99,6 +99,17 @@ def strip_qdf_artifacts(data):
     return data.replace(b"%QDF: ignore_newline\n", b"")
 
 
+def strip_xmp_bom(data):
+    """Replace the UTF-8 BOM some writers put in the XMP packet header.
+
+    LibreOffice writes the BOM inside the `<?xpacket begin="..."` attribute
+    value, which leaves three bytes above 127 in an otherwise ASCII file.
+    They are swapped for spaces rather than removed, so the stream length
+    stays correct.
+    """
+    return data.replace(b'<?xpacket begin="\xef\xbb\xbf"', b'<?xpacket begin="   "')
+
+
 def strip_binary_marker(data):
     """Replace the 4-byte binary marker after the PDF header with spaces."""
     index = data.find(b"\n%")
@@ -258,6 +269,7 @@ def to_ascii(pdf_path, out_path):
     data = strip_embedded_font(data)
     data = ascii85_encode_streams(data)
     data = strip_qdf_artifacts(data)
+    data = strip_xmp_bom(data)
     data = resolve_indirect_lengths(data)
     data = strip_binary_marker(data)
     data = rebuild_xref(data)
