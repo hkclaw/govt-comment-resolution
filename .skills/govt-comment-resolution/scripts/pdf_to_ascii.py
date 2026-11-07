@@ -39,7 +39,7 @@ def qdf_expand(pdf_path, out_path):
     of an embedded image roughly thirty times larger than the original.
     """
     result = subprocess.run(
-        ["qpdf", "--qdf", "--object-streams=disable",
+        ["qpdf", "--qdf", "--object-streams=disable", "--deterministic-id",
          str(pdf_path), str(out_path)],
         capture_output=True, text=True, timeout=300,
     )
@@ -188,6 +188,30 @@ def ascii85_encode_streams(data):
     return pattern.sub(convert, data)
 
 
+def strip_creation_date(data):
+    """Remove the creation date, the derived checksum, and fix the document ID.
+
+    LibreOffice stamps the time of conversion into the PDF, and qpdf derives a
+    document checksum and a random ID from it. Left in place, two runs of the
+    same workflow produce different bytes, so the samples never match what is
+    published and every run shows as a change.
+
+    The ID is replaced with a fixed value rather than a derived one, because
+    the content it would be derived from is the very thing that changes
+    between runs.
+    """
+    data = re.sub(rb"/CreationDate\s*\(D:[^)]*\)", b"", data)
+    data = re.sub(rb"/ModDate\s*\(D:[^)]*\)", b"", data)
+    data = re.sub(rb"/DocChecksum\s*/[0-9A-Fa-f]+", b"", data)
+    data = re.sub(
+        rb"/ID\s*\[[^\]]*\]",
+        b"/ID [<00000000000000000000000000000000>"
+        b"<00000000000000000000000000000000>]",
+        data,
+    )
+    return data
+
+
 def rebuild_xref(data):
     """Rebuild the cross-reference table after objects moved or vanished."""
     objects = {}
@@ -228,6 +252,9 @@ def to_ascii(pdf_path, out_path):
         qdf_expand(pdf_path, qdf_path)
         data = qdf_path.read_bytes()
 
+    # Strip the creation date before qpdf computes the document ID, otherwise
+    # the ID still changes between runs.
+    data = strip_creation_date(data)
     data = strip_embedded_font(data)
     data = ascii85_encode_streams(data)
     data = strip_qdf_artifacts(data)
