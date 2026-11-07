@@ -1,0 +1,29 @@
+# System dependencies for the govt-comment-resolution skill on macOS.
+#
+# The core workflow (extract, triage, plan, apply, replies) uses the Python
+# standard library alone. These are needed for the PDF steps and the
+# verification script.
+
+# Python packages (same as requirements.txt).
+pypdf>=4.0
+Pillow>=10.0
+reportlab>=4.0
+
+# Tools:
+#   brew install --cask libreoffice    # provides soffice, for PDF export
+#   brew install poppler               # provides pdftoppm, for page images
+#   brew install qpdf                  # provides qpdf, for the ASCII PDF check
+#
+# Fonts, only if the documents are in Chinese, Japanese or Korean:
+#   brew install --cask font-noto-sans-cjk font-noto-serif-cjk
+#
+# On macOS, LibreOffice bundles a fontconfig build that does not scan the
+# system font directories, so CJK text renders as empty .notdef glyphs even
+# when the fonts are installed. Point it at the Homebrew fontconfig config:
+#
+#   FONTCONFIG_FILE=/opt/homebrew/etc/fonts/fonts.conf
+#   FONTCONFIG_PATH=/opt/homebrew/etc/fonts
+#
+# The simplest way to make that apply to every conversion is a `soffice`
+# wrapper on PATH that exports the two variables before exec'ing
+# /Applications/LibreOffice.app/Contents/MacOS/soffice.
