@@ -168,15 +168,19 @@ instead of rebuilding from the original.
 ## Verify
 
 ```bash
-./verify.sh
+bash verify.sh
 ```
 
 Runs the test suite and checks the skill structure. CI runs the same script,
 then runs one full review round against a sample document so the pipeline is
 exercised end to end.
 
+Invoke the scripts through `bash` rather than as `./verify.sh`. The repository
+is published through an API that writes file contents but not file modes, so the
+executable bit does not survive the trip. `bash` works either way.
+
 ```bash
-./examples/run_example.sh
+bash examples/run_example.sh
 ```
 
 That builds a sample document with comments, runs the whole workflow over it,
@@ -236,10 +240,11 @@ produced it.
 ## Not done
 
 - Comments in a PDF are not read. The PDF is an output.
-- Multi-round behaviour is partial. Comment identity carries across rounds
-  through `durable_id`, but a resolved comment is not reopened automatically
-  when the department raises the same point again.
-- A colleague's answer is merged by hand into the comment file.
+- A colleague's answer is merged by hand into the comment file. The status and
+  owner make it clear whose answer is needed, but nobody is notified.
+- A comment the department raises again across rounds is recognised through
+  `durable_id` and marked `reopened`, but the earlier round's reply is not
+  summarised into the new one.
 
 ## Licence
 

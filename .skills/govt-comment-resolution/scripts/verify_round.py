@@ -77,7 +77,8 @@ def main():
 
     # 1. every comment has a valid status, owner, and reply
     valid_statuses = {
-        "open", "needs_input", "drafted", "approved", "resolved", "rejected", "wont_fix",
+        "open", "needs_input", "drafted", "approved", "resolved", "reopened",
+        "rejected", "wont_fix",
     }
     bad_status = [
         c["id"] for c in comments

@@ -571,6 +571,75 @@ def test_manifest_records_each_comment_own_owner():
               str(entry.get("reply_author_name")))
 
 
+def test_multi_round_detects_a_re_raise():
+    print("\n[14] a second round re-opens the comment the department came back to")
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp)
+        identity = work / "identity.json"
+        identity.write_text(json.dumps({
+            "default_author": "jane.doe",
+            "authors": [
+                {"id": "jane.doe", "name": "Jane Doe", "org": "Agency", "email": "j@x.gov"},
+                {"id": "alice", "name": "Alice Chen", "org": "Agency", "email": "a@x.gov"},
+            ],
+        }), encoding="utf-8")
+
+        src = build_sample(work / "sample.docx")
+        parts = D.read_parts(src)
+        # Round 1: we answer the comment.
+        ours = D.add_reply(parts, "1", "Our answer.", "Jane Doe")
+        D.write_parts(parts, work / "r1.docx")
+
+        # Round 2: the department replies to our answer.
+        parts = D.read_parts(work / "r1.docx")
+        D.add_reply(parts, ours["w_id"], "That does not answer my question.",
+                    "Dept Officer")
+        D.write_parts(parts, work / "r2.docx")
+
+        out = work / "comments"
+        result = subprocess.run(
+            [sys.executable, str(SCRIPTS / "extract_comments.py"),
+             "--docx", str(work / "r2.docx"), "--out", str(out),
+             "--identity", str(identity)],
+            capture_output=True, text=True,
+        )
+        check("extraction succeeded", result.returncode == 0, result.stderr[-300:])
+
+        files = sorted(out.glob("C-*.md"))
+        check("a comment file was produced", len(files) >= 1, str(files))
+        if not files:
+            return
+        body = files[0].read_text(encoding="utf-8")
+        check("the re-raised comment is marked reopened", "status: reopened" in body,
+              body[:400])
+        check("the department's words are shown",
+              "That does not answer my question." in body, body[-400:])
+        check("our own reply is not mistaken for a re-raise",
+              "Our answer." not in body.split("## Department replies")[-1]
+              if "## Department replies" in body else True)
+
+
+def test_reply_to_a_reply_is_anchored():
+    print("\n[15] a reply to a reply stays anchored in the document")
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp)
+        src = build_sample(work / "sample.docx")
+        parts = D.read_parts(src)
+        ours = D.add_reply(parts, "1", "Our answer.", "Jane Doe")
+        D.write_parts(parts, work / "r1.docx")
+
+        parts = D.read_parts(work / "r1.docx")
+        dept = D.add_reply(parts, ours["w_id"], "Still unclear.", "Dept Officer")
+        check("the reply to a reply was created",
+              dept["w_id"] not in ("1", ours["w_id"]), str(dept))
+        check("it is threaded to our reply",
+              dept["parent_para_id"] == ours["para_id"], str(dept))
+
+        doc_xml = parts["word/document.xml"].decode()
+        check("it carries its own commentReference",
+              f'<w:commentReference w:id="{dept["w_id"]}"' in doc_xml, doc_xml[-400:])
+
+
 def main():
     print("govt-comment-resolution regression tests")
     test_reply_is_threaded_and_visible()
@@ -587,6 +656,8 @@ def main():
     test_reextract_preserves_triage()
     test_warnings_are_not_reset_per_comment()
     test_manifest_records_each_comment_own_owner()
+    test_multi_round_detects_a_re_raise()
+    test_reply_to_a_reply_is_anchored()
 
     print(f"\n{len(PASSES)} passed, {len(FAILURES)} failed")
     if FAILURES:

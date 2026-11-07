@@ -25,7 +25,7 @@ jobs:
         run: pip install pypdf Pillow reportlab
 
       - name: Run every check
-        run: ./verify.sh
+        run: bash verify.sh
 
       - name: Run one full review round against the sample document
-        run: ./examples/run_example.sh
+        run: bash examples/run_example.sh

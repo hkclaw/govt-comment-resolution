@@ -208,24 +208,34 @@ was also written into the document.
 
 ---
 
-## Multi-round behaviour
+## A second review round
 
-A second review round works like this:
+The department sends the document back with new comments, and often replies to
+our own answers. A second round works like this:
 
-1. The department returns the document with new comments.
-2. Extract into the same review root; the manifest's `source.sha256` records
+1. Extract into the same review root; the manifest's `source.sha256` records
    which file this round started from.
-3. Comment identity carries forward through `durable_id`. A comment that was
-   resolved in round 1 and reappears in round 2 is the same comment. Match on
-   `durable_id`, never on `w:id`, because Word renumbers `w:id` on every save.
-4. `apply_replies.py` continues from the existing `working/` document when one
-   exists, so round 1's replies and tracked changes are preserved rather than
-   discarded.
+2. Pass `identity.json` so replies we wrote are not mistaken for the department
+   coming back:
 
-**Not yet specified:** automatic re-opening of resolved comments when a
-department raises the same point again, and cross-round aggregation of a single
-comment into several rounds' reply files. For now, treat each round's comment
-set as its own ledger and match across rounds by `durable_id` by hand.
+```bash
+python3 scripts/extract_comments.py --docx round2.docx --out comments \
+    --manifest manifest.json --identity identity.json
+```
+
+A reply the department wrote to one of our answers marks the comment
+`reopened`, whatever the resolve flag in the document says, and the
+department's words appear under **Department replies** in the comment file. A
+reply the department wrote to its own comment is recorded the same way but
+leaves the status alone, because that thread was never ours to close.
+
+Comment identity carries across rounds through `durable_id`, so a comment the
+department raises again is the same comment, not a new one. Match on
+`durable_id`, never on `w:id`, because Word renumbers `w:id` on every save.
+
+`apply_replies.py` continues from the existing `working/` document when one
+exists, so round 1's replies and tracked changes are preserved rather than
+discarded.
 
 ---
 

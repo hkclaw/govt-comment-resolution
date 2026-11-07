@@ -29,7 +29,8 @@ FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.S)
 FIELD_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$")
 
 STATUS_ORDER = [
-    "open", "needs_input", "drafted", "approved", "resolved", "rejected", "wont_fix",
+    "open", "needs_input", "drafted", "approved", "resolved", "reopened",
+    "rejected", "wont_fix",
 ]
 
 
