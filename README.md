@@ -22,6 +22,24 @@ The reply is attributed to a named person from a roster you configure. A reply
 with no author, an author outside the roster, or an author matching the
 comment's own author stops the run before any document is written.
 
+## How one round runs
+
+![Swimlane diagram of a review round](docs/review-round-flow.svg)
+
+Four lanes: the department, the reviewer, the skill, and a colleague. The
+colleague branch is the only optional path — a comment flagged `needs_input`
+goes out and comes back before the plan is built. The approval gate is the one
+step that blocks: nothing is written to the document until the plan has been
+signed off.
+
+The diagram is generated, not hand-drawn. Edit the spec in
+`docs/make_flow_diagram.py` and run it to rebuild both
+`docs/review-round-flow.svg` and `docs/review-round-flow.html`:
+
+```bash
+python3 docs/make_flow_diagram.py
+```
+
 ## Install
 
 Copy the skill into your workspace:
