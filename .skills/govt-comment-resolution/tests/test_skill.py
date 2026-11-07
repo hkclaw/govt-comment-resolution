@@ -640,6 +640,42 @@ def test_reply_to_a_reply_is_anchored():
               f'<w:commentReference w:id="{dept["w_id"]}"' in doc_xml, doc_xml[-400:])
 
 
+def test_pdf_conversion_is_reproducible():
+    print("\n[16] converting a PDF twice gives the same bytes")
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp)
+        src = build_sample(work / "sample.docx")
+
+        # A document with a comment, so the clean PDF has real content.
+        parts = D.read_parts(src)
+        D.apply_tracked_replace(parts, "4.2%", "4.1%", "Jane Doe")
+        D.write_parts(parts, work / "edited.docx")
+
+        pdf = work / "edited.pdf"
+        D.soffice_to_pdf(work / "edited.docx", pdf)
+
+        first = work / "first.pdf"
+        second = work / "second.pdf"
+        ascii_script = SCRIPTS / "pdf_to_ascii.py"
+        for target in (first, second):
+            result = subprocess.run(
+                [sys.executable, str(ascii_script), str(pdf), str(target)],
+                capture_output=True, text=True,
+            )
+            check(f"conversion to {target.name} succeeded",
+                  result.returncode == 0, result.stderr[-200:])
+
+        if first.exists() and second.exists():
+            one = first.read_bytes()
+            two = second.read_bytes()
+            check("the same input gives the same output", one == two,
+                  f"{len(one)} vs {len(two)} bytes")
+            check("the output is pure ASCII",
+                  all(byte < 128 for byte in one), "non-ASCII bytes remain")
+            check("the output still opens as a PDF",
+                  one.startswith(b"%PDF-"), one[:8])
+
+
 def main():
     print("govt-comment-resolution regression tests")
     test_reply_is_threaded_and_visible()
@@ -658,6 +694,7 @@ def main():
     test_manifest_records_each_comment_own_owner()
     test_multi_round_detects_a_re_raise()
     test_reply_to_a_reply_is_anchored()
+    test_pdf_conversion_is_reproducible()
 
     print(f"\n{len(PASSES)} passed, {len(FAILURES)} failed")
     if FAILURES:
