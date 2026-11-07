@@ -1,0 +1,21 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Local review output. A review round writes here.
+.govt-review/
+
+# Scratch space for local experiments
+.probe/
+
+# Sandbox and plugin caches
+.home/
+.plugin-cache/
+
+# Platform-bundled skills. This repo ships only the skill it owns.
+.skills/*
+!.skills/govt-comment-resolution/
+
+# Editor and OS noise
+.DS_Store
+*.swp
